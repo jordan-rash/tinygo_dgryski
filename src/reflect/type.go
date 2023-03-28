@@ -945,6 +945,8 @@ func (t *rawType) Size() uintptr {
 	}
 }
 
+var structAlignCache = make(map[*rawType]int)
+
 // Align returns the alignment of this type. It is similar to calling
 // unsafe.Alignof.
 func (t *rawType) Align() int {
@@ -981,6 +983,10 @@ func (t *rawType) Align() int {
 		var f func()
 		return int(unsafe.Alignof(f))
 	case Struct:
+		if align, ok := structAlignCache[t]; ok {
+			return align
+		}
+
 		numField := t.NumField()
 		alignment := 1
 		for i := 0; i < numField; i++ {
@@ -989,6 +995,7 @@ func (t *rawType) Align() int {
 				alignment = fieldAlignment
 			}
 		}
+		structAlignCache[t] = alignment
 		return alignment
 	case Array:
 		return t.elem().Align()
