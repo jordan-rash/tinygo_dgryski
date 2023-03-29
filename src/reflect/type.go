@@ -896,6 +896,8 @@ func (t *rawType) NumField() int {
 	return int((*structType)(unsafe.Pointer(t.underlying())).numField)
 }
 
+var structSizeCache = make(map[*rawType]uintptr)
+
 // Size returns the size in bytes of a given type. It is similar to
 // unsafe.Sizeof.
 func (t *rawType) Size() uintptr {
@@ -934,12 +936,18 @@ func (t *rawType) Size() uintptr {
 	case Array:
 		return t.elem().Size() * uintptr(t.Len())
 	case Struct:
+		if size, ok := structSizeCache[t]; ok {
+			return size
+		}
+
 		numField := t.NumField()
 		if numField == 0 {
 			return 0
 		}
 		lastField := t.rawField(numField - 1)
-		return align(lastField.Offset+lastField.Type.Size(), uintptr(t.Align()))
+		size := align(lastField.Offset+lastField.Type.Size(), uintptr(t.Align()))
+		structSizeCache[t] = size
+		return size
 	default:
 		panic("unimplemented: size of type")
 	}
@@ -1074,6 +1082,8 @@ func (t *rawType) Comparable() bool {
 	}
 }
 
+var structIsBinaryCache = make(map[*rawType]bool)
+
 // isbinary() returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *rawType) isBinary() bool {
 	switch t.Kind() {
@@ -1084,12 +1094,17 @@ func (t *rawType) isBinary() bool {
 	case Array:
 		return t.elem().isBinary()
 	case Struct:
+		if b, ok := structIsBinaryCache[t]; ok {
+			return b
+		}
 		numField := t.NumField()
 		for i := 0; i < numField; i++ {
 			if !t.rawField(i).Type.isBinary() {
+				structIsBinaryCache[t] = false
 				return false
 			}
 		}
+		structIsBinaryCache[t] = true
 		return true
 	}
 	return false
